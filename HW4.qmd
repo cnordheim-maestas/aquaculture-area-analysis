@@ -1,0 +1,171 @@
+---
+title: "Homework Assignment 4: Prioritizing potential aquaculture"
+author: "Caitlin Nordheim-Maestas"
+date: "`r Sys.Date()`"
+format: html
+---
+
+<https://eds-223-geospatial.github.io/assignments/HW4.html>
+
+# 0. Setup
+
+## read in data
+
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse) # data wrangling
+library(janitor) # data wrangling
+library(sf) # for spatial data
+library(tmap) # for pretty maps
+library(here) # file pathing
+library(viridisLite) # colors
+library(patchwork) # combine plots
+library(stars) # rasters
+library(terra) # rasters
+
+# load in data 
+
+############### SST
+# combine SST rasters into a raster stack
+# use c() or rast()
+# check resolution and extent
+
+# average_annual_sst_2008.tif
+# average_annual_sst_2009.tif
+# average_annual_sst_2010.tif
+# average_annual_sst_2011.tif
+# average_annual_sst_2012.tif
+
+############### Bathymetry
+# bathymetry raster: depth.tif
+
+############### Exclusive Economic Zones
+# shapefile for the West Coast EEZ: wc_regions_clean.shp
+
+```
+
+# 1. Workflow for single species
+
+## 1.2 Process data
+
+### sst
+
+```{r}
+# data checks
+
+# local algebra to find the mean 
+# lapp() or mean()
+
+# global algebra to sibtract 273.15 to convert from from Kelvin to Celsius
+
+```
+
+### get bathymetry to match the sst raster
+
+```{r}
+# SAME CRS: data check: ensure same crs
+
+# SAME EXTENT: crop depth raster to match the extent of the SST raster
+# can do by bbox or crop
+
+# SAME RESOLUTION: resample to ensure the resolutions match
+# using the nearest neighbor approach
+# done in discussion section 4
+
+# FINAL CHECK: check that the depth and SST match in resolution, extent, and coordinate reference system
+# hint: can the rasters be stacked?
+```
+
+## 1.3 Find suitable locations
+
+Find suitable locations for marine aquaculture, we’ll need to find locations that are suitable in terms of both SST and depth
+
+Remember, oysters can only exist between 11-30 degrees C and -70 through 0 depth. Set suitable values to 1 and unsuitable values to 0
+
+Matrix we will build for temp
+-Inf, 11, 0 # we want this to be a zero
+11, 30, 1 # we want this to be a one
+30, Inf, 0 # we want this to be a zero
+
+Matrix we will build for depth
+-Inf, -70, 0 # we want this to be a zero
+-70, 0, 1 # we want this to be a one
+0, Inf, 0 # we want this to be a zero
+
+
+```{r}
+# SST first!
+
+# lets build a matrix
+
+# now reclassify
+
+
+# Now Depth!
+
+# lets build a matrix
+
+# now reclassify
+```
+
+### find locations that satisfy both SST and depth conditions
+
+Tip: The SST and depth rasters should now identify the suitability of locations as 0 or 1. To find locations that have both suitable temperature and depth, you can use map algebra. One idea is to multiply the values of the cells, using the lapp() function.
+
+Why multiply? anything * 0 = 0 and anything * 1 = itself, so we will end up with only a suitable temp AND depth if it is 1.
+
+We will do a lapp of the reclassified sst and depth
+
+```{r}
+# lapp of the reclassified sst and depth multiplying them, call the output suitable_cells
+```
+
+## 1.4 Determine the most suitable EEZ
+
+We want to determine the total suitable area within each EEZ in order to rank zones by priority. To do so, we need to find the total area of suitable locations within each EEZ.
+
+### mask the suitable_cells in west coast
+
+```{r}
+# select suitable cells within West Coast EEZs, mask eez by suitable cells
+```
+
+### find area of grid cells
+
+In discussion today?
+
+Zonal algebra (x, y)
+
+x is raster, y needs to be a terra object (spatVector or a raster)
+
+extract()
+
+count grid cells
+
+cellsize()
+
+zonal_output --> eez
+
+```{r}
+
+```
+
+### find the total suitable area within each EEZ
+
+hint: it might be helpful to rasterize the EEZ data
+
+```{r}
+
+```
+
+## 1.5 ggPlot of one species
+
+# 2. Generalizable workflow
+
+Note: per species info like min_sst, max_sst min_depth and max_depth will be parms
+
+# 3. Output map for single species
+
+
