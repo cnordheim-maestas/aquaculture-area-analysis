@@ -258,26 +258,18 @@ tmap_arrange(map1, map2, nrow = 1)
 
 ### find locations that satisfy both SST and depth conditions
 
-Tip: The SST and depth rasters should now identify the suitability of locations as 0 or 1. To find locations that have both suitable temperature and depth, you can use map algebra. One idea is to multiply the values of the cells, using the lapp() function.
+Tip: The SST and depth rasters should now identify the suitability of locations as 0 or 1. To find locations that have both suitable temperature and depth, you can use map algebra. 
 
 Why multiply? anything * 0 = 0 and anything * 1 = itself, so we will end up with only a suitable temp AND depth if it is 1.
 
-We will do a lapp of the reclassified sst and depth
-
 ```{r}
-# lapp of the reclassified sst and depth multiplying them, call the output suitable_cells
-
+# determine the suitable cells using the reclassified sst and depth multiplying them, call the output suitable_cells
 suitable_cells <- sst_rcl * bath_rcl
-suitable_cells 
 
-sst_rcl
+# make 0's NA
+suitable_cells[suitable_cells == 0] <- NA
 
-global(sst_rcl, fun = range, na.rm = TRUE)
-freq(sst_rcl)
-bath_rcl
-suitable_cells 
-
-
+# visualize what we just did
 map1 <- tm_shape(sst_rcl) +
   tm_raster(col.legend = tm_legend(title = "Suitable?"))+
   tm_title(text= "sst")
@@ -291,19 +283,66 @@ map3 <- tm_shape(suitable_cells) +
 tmap_arrange(map1, map2, map3, nrow = 1) 
 ```
 
-Now make 0 NA??
 
 ## 1.4 Determine the most suitable EEZ
 
 We want to determine the total suitable area within each EEZ in order to rank zones by priority. To do so, we need to find the total area of suitable locations within each EEZ.
 
+### check out eez
+
+```{r}
+class(eez) # sf dataframe
+colnames(eez) # regions on west coast, their area, and geometry
+st_crs(eez) # WGS 84, good matches the rasters
+
+# quick vis
+map1 <- tm_shape(eez) +
+   tm_basemap("Esri.WorldGrayCanvas") +
+  tm_graticules() +
+  tm_borders() +
+tm_shape(suitable_cells, bbox = eez_bbox) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))
+map1
+```
+
+
 ### mask the suitable_cells in west coast
 
 ```{r}
+# crs check 
+# st_crs(eez) # WGS 84
+# crs(suitable_cells) # WGS 84
+
+# crop suitable cells to eez
+suitable_cropped <- crop(suitable_cells, eez)
+
 # select suitable cells within West Coast EEZs, mask eez by suitable cells
+eez_suitable <- mask(suitable_cropped, eez) # create a new SpatRaster that has the same values as SpatRaster x except for cells in y that are NA
+
+# now the suitable areas are cropped to the west coast eez only
+map1 <- tm_shape(eez) +
+   tm_basemap("Esri.WorldGrayCanvas") +
+  tm_graticules() +
+  tm_borders() +
+tm_shape(eez_suitable) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))
+map1
+
+# rasterize?
+suitable_zones <- rasterize(eez, suitable_cells, field = "area_km2")
+suitable_zones
+
+# now mask?
+eez_suitable <- mask(suitable_cells, suitable_zones)
+eez_suitable
+
+map1 <- tm_shape(eez_suitable) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))
+map1
 ```
 
-### find area of grid cells
+find area of grid cells
+
 
 In discussion today?
 
@@ -319,24 +358,56 @@ cellsize()
 
 zonal_output --> eez
 
-```{r}
-
-```
 
 ### find the total suitable area within each EEZ
 
 hint: it might be helpful to rasterize the EEZ data
 
-```{r}
 
+```{r}
+zones_suitarea <- terra::zonal(suitable_cells, suitable_zones, fun = "sum") # unclear on what to input here
+zones_annotated <- cbind(eez, zones_suitarea)
+
+# clean the df for funsies
+zones_clean <- zones_annotated  %>%  
+  dplyr::select(rgn, area_km2, area_km2.1) %>% 
+  rename("suitable_area" = "area_km2.1") 
+
+class(zones_clean) # "sf"         "data.frame"
 ```
 
-## 1.5 ggPlot of one species
+
+## 1.5 map of one species
+
+map of EEZ regions colored by amount of suitable area
+species name should be included in the map’s title
+
+Here is a draft of the final output map
+
+```{r}
+map <- tm_shape(zones_clean) + # vector data, use tmshape. 
+    tm_graticules() + # add graticules at this layer
+ 
+# next layer: fill by area of suitable habitat
+  tm_polygons(fill = "suitable_area", # column name with the values
+  # specify the color scale, using viridis because it is colorblind friendly
+              fill.scale = tm_scale(values =  viridis(2)), 
+              fill.legend = tm_legend(title = "Area of suitable habitat (km2)", 
+                                      position = tm_pos_out("right"))) +
+  
+ # next layer: show the outlines of the zones clearly
+  tm_borders(col = "black") + # borders of the counties
+
+# add map elements
+  tm_title(text = "Suitable habitat for this species in each eez") 
+
+map
+```
 
 # 2. Generalizable workflow
 
 Note: per species info like min_sst, max_sst min_depth and max_depth will be parms
 
-# 3. Output map for single species
+# 3. Output map with generalizable workflow
 
 
