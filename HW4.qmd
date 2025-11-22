@@ -217,9 +217,6 @@ sst_matrix
 # use reclassification matrix to reclassify elevation raster
 sst_rcl <- classify(sst_c, rcl = sst_matrix)
 
-# change reclassified values into factors
-values(sst_rcl) <- as.factor(values(sst_rcl))
-
 # quick vis of what we just did
 map1 <- tm_shape(sst_c) +
   tm_raster(col.legend = tm_legend(title = "SST (C)"))+
@@ -238,16 +235,13 @@ tmap_arrange(map1, map2, nrow = 1)
 # Now Depth!
 # lets build a matrix
 # UPDATE VALUES
-# bath_matrix <- matrix(c(-Inf, 11, 0, # from -inf temp to 11, too cold, make a 0
-#                         11, 30, 1, # good zone! make it 1
-#                         30, Inf, 0), # from 30 to inf is too hot, make it a 0
-#                         ncol = 3, byrow = TRUE)
+bath_matrix <- matrix(c(-Inf, -70, 0, # from -inf to -70 too deep, make a 0
+                        -70, 0, 1, # good zone! make it 1
+                        0, Inf, 0), # 0 to infinity too high
+                        ncol = 3, byrow = TRUE)
 
 # use reclassification matrix to reclassify elevation raster
 bath_rcl <- classify(bath_final, rcl = bath_matrix)
-
-# change reclassified values into factors
-values(bath_rcl) <- as.factor(values(bath_rcl))
 
 # quick vis of what we just did
 map1 <- tm_shape(bath_final) +
@@ -272,7 +266,32 @@ We will do a lapp of the reclassified sst and depth
 
 ```{r}
 # lapp of the reclassified sst and depth multiplying them, call the output suitable_cells
+
+suitable_cells <- sst_rcl * bath_rcl
+suitable_cells 
+
+sst_rcl
+
+global(sst_rcl, fun = range, na.rm = TRUE)
+freq(sst_rcl)
+bath_rcl
+suitable_cells 
+
+
+map1 <- tm_shape(sst_rcl) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))+
+  tm_title(text= "sst")
+map2 <- tm_shape(bath_rcl) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))+
+  tm_title(text= "bath")
+map3 <- tm_shape(suitable_cells) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))+
+  tm_title(text= "both")
+
+tmap_arrange(map1, map2, map3, nrow = 1) 
 ```
+
+Now make 0 NA??
 
 ## 1.4 Determine the most suitable EEZ
 
