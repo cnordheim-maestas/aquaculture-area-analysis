@@ -32,17 +32,33 @@ library(terra) # rasters
 # use c() or rast()
 # check resolution and extent
 
-# average_annual_sst_2008.tif
-# average_annual_sst_2009.tif
-# average_annual_sst_2010.tif
-# average_annual_sst_2011.tif
-# average_annual_sst_2012.tif
+sst_2008 <- rast(here("data", "average_annual_sst_2008.tif"))
+sst_2009 <- rast(here("data", "average_annual_sst_2009.tif"))
+sst_2010 <- rast(here("data", "average_annual_sst_2010.tif"))
+sst_2011 <- rast(here("data", "average_annual_sst_2011.tif"))
+sst_2012 <- rast(here("data", "average_annual_sst_2012.tif"))
+
+sst <- c(sst_2008, 
+         sst_2009, 
+         sst_2010, 
+         sst_2011, 
+         sst_2012)
+
+names(sst) <- c("2008", 
+         "2009",
+         "2010",
+         "2011",
+         "2012")
+
+sst
 
 ############### Bathymetry
 # bathymetry raster: depth.tif
+bath <- rast(here("data", "depth.tif"))
 
 ############### Exclusive Economic Zones
 # shapefile for the West Coast EEZ: wc_regions_clean.shp
+eez <- st_read(here("data", "wc_regions_clean.shp"))
 
 ```
 
@@ -54,28 +70,119 @@ library(terra) # rasters
 
 ```{r}
 # data checks
+class(sst) # terra
+crs(sst) # WGS 84
+names(sst)
+summary(sst)
 
+# quick vis
+# 2008
+sst_2008_map <- tm_shape(sst[["2008"]]) +
+  tm_raster() +
+  tm_title(text = "2008")
+
+# 2009
+sst_2009_map <- tm_shape(sst[["2009"]]) +
+  tm_raster() +
+  tm_title(text = "2009")
+
+# 2010
+sst_2010_map <- tm_shape(sst[["2010"]]) +
+  tm_raster() +
+  tm_title(text = "2010")
+
+# 2011
+sst_2011_map <- tm_shape(sst[["2011"]]) +
+  tm_raster() +
+  tm_title(text = "2011")
+
+# 2012
+sst_2012_map <- tm_shape(sst[["2012"]]) +
+  tm_raster() +
+  tm_title(text = "2012")
+
+# arrange them in a panel
+tmap_arrange(
+  sst_2008_map,
+  sst_2009_map,
+  sst_2010_map,
+  sst_2011_map,
+  sst_2012_map,
+  ncol = 3
+)
+```
+
+Now we average and convert to C
+
+```{r}
 # local algebra to find the mean 
 # lapp() or mean()
+sst_mean <- lapp(sst, fun = ave) # average function
 
-# global algebra to sibtract 273.15 to convert from from Kelvin to Celsius
+# global algebra to subtract 273.15 to convert from from Kelvin to Celsius
+sst_c <- sst_mean - 273.15
 
+# quick vis
+tm_shape(sst_c) +
+  tm_raster() +
+  tm_title(text = "Average sst (C)")
+  tm_layout(legend.outside.position = "right")
 ```
+
 
 ### get bathymetry to match the sst raster
 
 ```{r}
 # SAME CRS: data check: ensure same crs
+if(crs(bath) == crs(sst_c)) {
+  print("coordinate reference systems match")
+} else{
+  bath <- project(bath, sst_c) 
+}
+
+# quick explore
+# bath # extent: -132, -114, 29, 50  (xmin, xmax, ymin, ymax)
+# sst_c # extent: -131.9848, -114.9867, 29.99305, 49.98842  (xmin, xmax, ymin, ymax)
 
 # SAME EXTENT: crop depth raster to match the extent of the SST raster
-# can do by bbox or crop
+# crop bathymetry raster to extent of sst_c
+bath_crop <- crop(bath, sst_c)
 
 # SAME RESOLUTION: resample to ensure the resolutions match
 # using the nearest neighbor approach
 # done in discussion section 4
+bath_final <- resample(bath_crop, y = sst_c, 
+                          method = "near") # for nearest neighbor
+
+bath_final # coord. ref. : lon/lat WGS 84 (EPSG:4326) 
+sst_c # coord. ref. : lon/lat WGS 84 
 
 # FINAL CHECK: check that the depth and SST match in resolution, extent, and coordinate reference system
 # hint: can the rasters be stacked?
+
+# check for extent match
+if(ext(bath_final) == ext(sst_c)){
+  print("extents match")
+} else{
+  print("extents do not match")
+} # not perfect but really close!
+
+# check for resolution match
+if(resolution(bath_final) == resolution(sst_c)){
+  print("resolution match")
+} else{
+  print("resolution do not match")
+} # yay
+
+# check for crs
+if(crs(bath_final) == crs(sst_c)){
+  print("crs match")
+} else{
+  print("crs do not match")
+} # yay
+
+# can the rasters be stacked? Yep!
+# sst_bath <- c(bath_final, sst_c)
 ```
 
 ## 1.3 Find suitable locations
@@ -94,21 +201,66 @@ Matrix we will build for depth
 -70, 0, 1 # we want this to be a one
 0, Inf, 0 # we want this to be a zero
 
+Hint check out week 4 lab
+
 
 ```{r}
 # SST first!
-
 # lets build a matrix
+sst_matrix <- matrix(c(-Inf, 11, 0, # from -inf temp to 11, too cold, make a 0
+                        11, 30, 1, # good zone! make it 1
+                        30, Inf, 0), # from 30 to inf is too hot, make it a 0
+                        ncol = 3, byrow = TRUE)
 
-# now reclassify
+sst_matrix
 
+# use reclassification matrix to reclassify elevation raster
+sst_rcl <- classify(sst_c, rcl = sst_matrix)
 
-# Now Depth!
+# change reclassified values into factors
+values(sst_rcl) <- as.factor(values(sst_rcl))
 
-# lets build a matrix
+# quick vis of what we just did
+map1 <- tm_shape(sst_c) +
+  tm_raster(col.legend = tm_legend(title = "SST (C)"))+
+  tm_title(text = "original")
 
-# now reclassify
+map2 <- tm_shape(sst_rcl) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))+
+  tm_title(text= "reclassified")
+
+tmap_arrange(map1, map2, nrow = 1) 
 ```
+
+
+
+```{r}
+# Now Depth!
+# lets build a matrix
+# UPDATE VALUES
+# bath_matrix <- matrix(c(-Inf, 11, 0, # from -inf temp to 11, too cold, make a 0
+#                         11, 30, 1, # good zone! make it 1
+#                         30, Inf, 0), # from 30 to inf is too hot, make it a 0
+#                         ncol = 3, byrow = TRUE)
+
+# use reclassification matrix to reclassify elevation raster
+bath_rcl <- classify(bath_final, rcl = bath_matrix)
+
+# change reclassified values into factors
+values(bath_rcl) <- as.factor(values(bath_rcl))
+
+# quick vis of what we just did
+map1 <- tm_shape(bath_final) +
+  tm_raster(col.legend = tm_legend(title = "depth"))+
+  tm_title(text = "original")
+
+map2 <- tm_shape(bath_rcl) +
+  tm_raster(col.legend = tm_legend(title = "Suitable?"))+
+  tm_title(text= "reclassified")
+
+tmap_arrange(map1, map2, nrow = 1) 
+```
+
 
 ### find locations that satisfy both SST and depth conditions
 
